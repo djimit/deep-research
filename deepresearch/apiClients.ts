@@ -4,11 +4,24 @@ import "dotenv/config";
 
 import { SearchResult } from "./models";
 
+// Validate API keys at startup
+if (!process.env.TOGETHER_API_KEY) {
+  throw new Error(
+    "TOGETHER_API_KEY environment variable is required. Please add it to your .env file."
+  );
+}
+
+if (!process.env.EXA_API_KEY) {
+  throw new Error(
+    "EXA_API_KEY environment variable is required. Please add it to your .env file."
+  );
+}
+
 export const togetheraiClient = createTogetherAI({
-  apiKey: process.env.TOGETHER_API_KEY ?? "",
+  apiKey: process.env.TOGETHER_API_KEY,
 });
 
-const exa = new Exa(process.env.EXA_API_KEY ?? "");
+const exa = new Exa(process.env.EXA_API_KEY);
 
 type SearchResults = {
   results: SearchResult[];
