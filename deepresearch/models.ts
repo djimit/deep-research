@@ -109,6 +109,24 @@ export class SearchResults {
 
     return new SearchResults(uniqueResults);
   }
+
+  /**
+   * Truncated string representation for evaluation to avoid context length issues.
+   * Limits to first 10 results and truncates content to 500 characters per result.
+   */
+  toEvaluationString(): string {
+    const maxResults = 10;
+    const maxContentLength = 500;
+
+    const limitedResults = this.results.slice(0, maxResults);
+
+    return limitedResults
+      .map((result, i) => {
+        const truncatedContent = result.content.substring(0, maxContentLength);
+        return `[${i + 1}] Title: ${result.title}\nLink: ${result.link}\nContent: ${truncatedContent}${result.content.length > maxContentLength ? '...' : ''}`;
+      })
+      .join("\n\n");
+  }
 }
 
 /**

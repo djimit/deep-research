@@ -274,9 +274,8 @@ export class DeepResearchPipeline {
     results: SearchResults,
     queries: string[]
   ): Promise<string[]> {
-    const formattedResults = results.toString();
-
-    // context length issue here!
+    // Use toEvaluationString() to avoid context length issues by limiting results and truncating content
+    const formattedResults = results.toEvaluationString();
 
     const evaluation = await generateText({
       model: togetheraiClient(this.modelConfig.planningModel),
