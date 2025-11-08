@@ -3,25 +3,21 @@ import Exa from "exa-js";
 import "dotenv/config";
 
 import { SearchResult } from "./models";
+import { getConfig } from "./config-manager";
+import { validateApiKey } from "./security";
 
-// Validate API keys at startup
-if (!process.env.TOGETHER_API_KEY) {
-  throw new Error(
-    "TOGETHER_API_KEY environment variable is required. Please add it to your .env file."
-  );
-}
+// Get configuration
+const config = getConfig();
 
-if (!process.env.EXA_API_KEY) {
-  throw new Error(
-    "EXA_API_KEY environment variable is required. Please add it to your .env file."
-  );
-}
+// Validate API keys
+validateApiKey(config.apiKeys.togetherAI, "TOGETHER_API_KEY");
+validateApiKey(config.apiKeys.exaSearch, "EXA_API_KEY");
 
 export const togetheraiClient = createTogetherAI({
-  apiKey: process.env.TOGETHER_API_KEY,
+  apiKey: config.apiKeys.togetherAI,
 });
 
-const exa = new Exa(process.env.EXA_API_KEY);
+const exa = new Exa(config.apiKeys.exaSearch);
 
 type SearchResults = {
   results: SearchResult[];

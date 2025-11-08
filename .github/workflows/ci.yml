@@ -1,0 +1,224 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, 'claude/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ========================================
+  # Security Checks
+  # ========================================
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  # ========================================
+  # Linting and Formatting
+  # ========================================
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check TypeScript
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      # TODO: Add ESLint when configured
+      # - name: Run ESLint
+      #   run: pnpm run lint
+
+  # ========================================
+  # Testing
+  # ========================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm test
+        env:
+          NODE_ENV: test
+          TOGETHER_API_KEY: test_key_1234567890123456789012345
+          EXA_API_KEY: test_key_1234567890123456789012345
+
+      - name: Generate coverage report
+        run: pnpm test:coverage
+        env:
+          NODE_ENV: test
+          TOGETHER_API_KEY: test_key_1234567890123456789012345
+          EXA_API_KEY: test_key_1234567890123456789012345
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+  # ========================================
+  # Build
+  # ========================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [security, lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # If you have a build step
+      # - name: Build
+      #   run: pnpm run build
+
+      - name: Build Docker image
+        run: docker build -t deep-research:${{ github.sha }} .
+
+      - name: Save Docker image
+        run: docker save deep-research:${{ github.sha }} > deep-research.tar
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: deep-research.tar
+          retention-days: 1
+
+  # ========================================
+  # Deploy (Staging)
+  # ========================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging.deepresearch.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load < deep-research.tar
+
+      - name: Tag image
+        run: docker tag deep-research:${{ github.sha }} deep-research:staging
+
+      # TODO: Add deployment steps
+      # - name: Deploy to staging
+      #   run: |
+      #     # Deploy to your staging environment
+      #     # e.g., kubectl apply -f k8s/staging/
+      #     # or docker push to registry and trigger deployment
+
+  # ========================================
+  # Deploy (Production)
+  # ========================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://deepresearch.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+
+      - name: Load Docker image
+        run: docker load < deep-research.tar
+
+      - name: Tag image
+        run: docker tag deep-research:${{ github.sha }} deep-research:latest
+
+      # TODO: Add deployment steps
+      # - name: Deploy to production
+      #   run: |
+      #     # Deploy to your production environment
+      #     # e.g., kubectl apply -f k8s/production/
+      #     # or docker push to registry and trigger deployment
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
