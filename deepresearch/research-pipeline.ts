@@ -12,11 +12,18 @@ import { MODEL_CONFIG, PROMPTS, RESEARCH_CONFIG } from "./config";
 import { togetheraiClient, searchOnExa } from "./apiClients";
 import {
   generateText,
-  generateObject,
   extractReasoningMiddleware,
   wrapLanguageModel,
 } from "ai";
 import { z } from "zod";
+
+type ResearchPlan = {
+  queries: string[];
+};
+
+type SourceList = {
+  sources: number[];
+};
 
 /**
  * Deep Research Pipeline
@@ -30,16 +37,23 @@ export class DeepResearchPipeline {
   private prompts: typeof PROMPTS;
   private currentSpending: number = 0;
 
-  private researchPlanSchema = z.object({
+  private researchPlanSchema: z.ZodType<ResearchPlan> = z.object({
     queries: z
       .string()
       .array()
       .describe("A list of search queries to thoroughly research the topic"),
   });
 
-  private sourceListSchema = z.object({
+  private sourceListSchema: z.ZodType<SourceList> = z.object({
     sources: z.array(z.number()).describe("List of source indices to keep"),
   });
+
+  private parseJsonResponse<T>(text: string): T {
+    const fencedJsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    const jsonText = fencedJsonMatch?.[1] ?? text;
+
+    return JSON.parse(jsonText) as T;
+  }
 
   constructor(
     modelConfig = MODEL_CONFIG,
@@ -101,22 +115,24 @@ export class DeepResearchPipeline {
    * @returns List of search queries
    */
   private async generateResearchQueries(topic: string): Promise<string[]> {
-    const parsedPlan = await generateObject({
+    const parsedPlan = await generateText({
       model: togetheraiClient(this.modelConfig.jsonModel),
       messages: [
         { role: "system", content: this.prompts.planningPrompt },
         { role: "user", content: `Research Topic: ${topic}` },
       ],
-      schema: this.researchPlanSchema,
     });
+    const plannedQueries = this.parseJsonResponse<ResearchPlan>(
+      parsedPlan.text
+    ).queries;
 
     console.log(
-      `\x1b[35m📋 Research queries generated: \n - ${parsedPlan.object.queries.join(
+      `\x1b[35m📋 Research queries generated: \n - ${plannedQueries.join(
         "\n - "
       )}\x1b[0m`
     );
 
-    return parsedPlan.object.queries;
+    return plannedQueries;
   }
 
   /**
@@ -162,8 +178,8 @@ export class DeepResearchPipeline {
     results: SearchResult[]
   ): Promise<SearchResult[]> {
     // Create tasks for summarization
-    const summarizationTasks = [];
-    const resultInfo = [];
+    const summarizationTasks: Promise<string>[] = [];
+    const resultInfo: SearchResult[] = [];
 
     for (const result of results) {
       if (!result.content) {
@@ -297,7 +313,7 @@ export class DeepResearchPipeline {
     // );
     // console.log(`\x1b[36m📝 Evaluation:\n\n ${evaluation.text}\x1b[0m`);
 
-    const parsedEvaluation = await generateObject({
+    const parsedEvaluation = await generateText({
       model: togetheraiClient(this.modelConfig.jsonModel),
       messages: [
         { role: "system", content: this.prompts.evaluationParsingPrompt },
@@ -306,10 +322,9 @@ export class DeepResearchPipeline {
           content: `Evaluation to be parsed: ${evaluation.text}`,
         },
       ],
-      schema: this.researchPlanSchema,
     });
 
-    return parsedEvaluation.object.queries;
+    return this.parseJsonResponse<ResearchPlan>(parsedEvaluation.text).queries;
   }
 
   /**
@@ -364,7 +379,7 @@ export class DeepResearchPipeline {
 
     // console.log(`\x1b[36m📝 Filter response: ${filterResponse.text}\x1b[0m`);
 
-    const parsedFilter = await generateObject({
+    const parsedFilter = await generateText({
       model: togetheraiClient(this.modelConfig.jsonModel),
       messages: [
         { role: "system", content: this.prompts.sourceParsingPrompt },
@@ -373,10 +388,9 @@ export class DeepResearchPipeline {
           content: `Filter response to be parsed: ${filterResponse.text}`,
         },
       ],
-      schema: this.sourceListSchema,
     });
 
-    const sources = parsedFilter.object.sources;
+    const sources = this.parseJsonResponse<SourceList>(parsedFilter.text).sources;
     console.log(`\x1b[36m📊 Filtered sources: ${sources}\x1b[0m`);
 
     // Limit sources if needed
@@ -388,8 +402,8 @@ export class DeepResearchPipeline {
     // Filter the results based on the source list
     const filteredResults = new SearchResults(
       limitedSources
-        .filter((i) => i > 0 && i <= results.results.length)
-        .map((i) => results.results[i - 1])
+        .filter((i: number) => i > 0 && i <= results.results.length)
+        .map((i: number) => results.results[i - 1])
     );
 
     return {
@@ -542,7 +556,7 @@ export class DeepResearchPipeline {
           content: `Research Topic: ${topic}\n\nSearch Results:\n${formattedResults}`,
         },
       ],
-      maxTokens: this.researchConfig.maxTokens,
+      maxOutputTokens: this.researchConfig.maxTokens,
     });
 
     return answer.text.trim();
