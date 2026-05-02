@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@ai-sdk/togetherai": "^0.2.10",
-    "ai": "^4.3.6",
+    "ai": "^5.0.52",
     "dotenv": "^16.5.0",
     "esbuild-runner": "^2.2.2",
     "exa-js": "^1.5.13",
@@ -18,5 +18,9 @@
   "devDependencies": {
     "@types/node": "^20",
     "typescript": "^5"
+  },
+  "overrides": {
+    "ai": "^5.0.52",
+    "jsondiffpatch": "^0.7.3"
   }
 }
