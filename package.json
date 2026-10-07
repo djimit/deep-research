@@ -8,19 +8,19 @@
     "dev": " esr demo.ts"
   },
   "dependencies": {
-    "@ai-sdk/togetherai": "^0.2.10",
-    "ai": "^5.0.52",
+    "@ai-sdk/togetherai": "^3.0.66",
+    "ai": "^7.0.131",
     "dotenv": "^16.5.0",
     "esbuild-runner": "^2.2.2",
     "exa-js": "^1.5.13",
-    "zod": "^3.24.2"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^20",
     "typescript": "^5"
   },
   "overrides": {
-    "ai": "^5.0.52",
+    "ai": "^7.0.131",
     "jsondiffpatch": "^0.7.3"
   }
 }
